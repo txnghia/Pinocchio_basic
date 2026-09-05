@@ -1,0 +1,428 @@
+#line 1 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+#include <Arduino.h>
+#include <Arduino_RouterBridge.h>
+#include <Wire.h>
+#include <stm32u5xx.h>
+
+#include "HardwareConfig.h"
+
+struct ServoMotion {
+  float current;
+  float start;
+  float target;
+  uint32_t startedMs;
+  uint32_t durationMs;
+};
+
+struct StepperAxis {
+  int32_t position;
+  int32_t target;
+  uint32_t intervalUs;
+  uint32_t lastStepUs;
+};
+
+struct DcAxis {
+  volatile int32_t position;
+  int32_t target;
+  uint8_t maxPwm;
+  volatile int16_t pwmCommand;
+  bool active;
+};
+
+ServoMotion servos[8];
+StepperAxis steppers[3] = {};
+DcAxis dc[2] = {};
+struct RgbColor { uint8_t red, green, blue; };
+RgbColor stageLights[STAGE_LIGHT_COUNT] = {};
+bool armed = false;
+bool watchdogFault = false;
+uint32_t lastHeartbeatMs = 0;
+
+// SM16823E uses a 1.2 us RGB protocol: 0.3/0.9 us for zero and 0.9/0.3 us
+// for one, followed by one 16-bit gain word. UNO Q's STM32U585 runs at
+// 160 MHz; direct PC0 writes and the Cortex cycle counter provide sub-us timing.
+constexpr uint32_t SM16823_CPU_HZ = 160000000UL;
+constexpr uint32_t SM16823_SHORT_CYCLES = SM16823_CPU_HZ * 3UL / 10000000UL;
+constexpr uint32_t SM16823_LONG_CYCLES = SM16823_CPU_HZ * 9UL / 10000000UL;
+
+#line 47 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void sm16823Wait(uint32_t cycles);
+#line 52 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void sm16823WriteBit(bool one);
+#line 59 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void sm16823WriteByte(uint8_t value);
+#line 63 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void showStageLights();
+#line 80 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void sm16823Begin();
+#line 89 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void pcaWrite8(uint8_t reg, uint8_t value);
+#line 96 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void pcaSet(uint8_t channel, uint16_t on, uint16_t off);
+#line 107 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void pcaBegin();
+#line 115 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+uint16_t servoTicks(uint8_t channel, float degrees);
+#line 121 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void setSteppersEnabled(bool enabled);
+#line 130 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void setDcMotor(uint8_t motor, int command);
+#line 147 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void stopOutputs();
+#line 159 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+bool estopActive();
+#line 161 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int getState();
+#line 168 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int heartbeat();
+#line 174 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int armSystem(bool enable);
+#line 187 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int setServo(int channel, int degrees, int durationMs);
+#line 197 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int moveStepper(int axis, int targetSteps, int speedStepsPerSecond);
+#line 204 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int moveDc(int motor, int targetCounts, int maxPwm);
+#line 212 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int setRgbLight(int light, int red, int green, int blue);
+#line 223 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int setAllRgbLights(int red, int green, int blue);
+#line 234 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int stopAll();
+#line 240 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int getEncoder(int motor);
+#line 250 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+int getDcCommand(int motor);
+#line 255 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void encoder0();
+#line 256 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void encoder1();
+#line 258 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void updateServos(uint32_t nowMs);
+#line 269 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void updateSteppers(uint32_t nowUs);
+#line 283 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void updateDc();
+#line 301 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void setup();
+#line 346 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+void loop();
+#line 47 "/home/arduino/ArduinoApps/pinocchio_add_light/sketch/sketch.ino"
+inline __attribute__((always_inline)) void sm16823Wait(uint32_t cycles) {
+  const uint32_t start = DWT->CYCCNT;
+  while (DWT->CYCCNT - start < cycles) {}
+}
+
+inline __attribute__((always_inline)) void sm16823WriteBit(bool one) {
+  GPIOC->BSRR = GPIO_BSRR_BS0;
+  sm16823Wait(one ? SM16823_LONG_CYCLES : SM16823_SHORT_CYCLES);
+  GPIOC->BSRR = GPIO_BSRR_BR0;
+  sm16823Wait(one ? SM16823_SHORT_CYCLES : SM16823_LONG_CYCLES);
+}
+
+void sm16823WriteByte(uint8_t value) {
+  for (int bit = 7; bit >= 0; --bit) sm16823WriteBit(value & (1U << bit));
+}
+
+void showStageLights() {
+  digitalWrite(STAGE_LIGHT_DATA_PIN, LOW);
+  delayMicroseconds(250);  // Reset/latch requires at least 200 us low.
+  noInterrupts();
+  for (uint8_t i = 0; i < STAGE_LIGHT_COUNT; ++i) {
+    sm16823WriteByte(stageLights[i].red);   // SM16823E order is R, G, B.
+    sm16823WriteByte(stageLights[i].green);
+    sm16823WriteByte(stageLights[i].blue);
+  }
+  const uint8_t gain = constrain(STAGE_LIGHT_CURRENT_GAIN, 1, 16) - 1;
+  const uint16_t gainWord = (gain << 12) | (gain << 8) | (gain << 4);
+  for (int bit = 15; bit >= 0; --bit) sm16823WriteBit(gainWord & (1U << bit));
+  GPIOC->BSRR = GPIO_BSRR_BR0;
+  interrupts();
+  delayMicroseconds(250);
+}
+
+void sm16823Begin() {
+  pinMode(STAGE_LIGHT_DATA_PIN, OUTPUT);
+  digitalWrite(STAGE_LIGHT_DATA_PIN, LOW);
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+  DWT->CYCCNT = 0;
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  showStageLights();
+}
+
+void pcaWrite8(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(PCA9685_ADDRESS);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+void pcaSet(uint8_t channel, uint16_t on, uint16_t off) {
+  const uint8_t reg = 0x06 + 4 * channel;
+  Wire.beginTransmission(PCA9685_ADDRESS);
+  Wire.write(reg);
+  Wire.write(on & 0xFF);
+  Wire.write(on >> 8);
+  Wire.write(off & 0xFF);
+  Wire.write(off >> 8);
+  Wire.endTransmission();
+}
+
+void pcaBegin() {
+  pcaWrite8(0x00, 0x10);  // sleep
+  const uint8_t prescale = static_cast<uint8_t>(25000000UL / (4096UL * PCA9685_FREQUENCY_HZ) - 1);
+  pcaWrite8(0xFE, prescale);
+  pcaWrite8(0x00, 0x20);  // auto-increment, awake
+  delay(1);
+}
+
+uint16_t servoTicks(uint8_t channel, float degrees) {
+  degrees = constrain(degrees, 0.0f, 180.0f);
+  return SERVO_MIN_TICKS[channel] +
+         static_cast<uint16_t>((SERVO_MAX_TICKS[channel] - SERVO_MIN_TICKS[channel]) * degrees / 180.0f);
+}
+
+void setSteppersEnabled(bool enabled) {
+  // A4988 ENABLE is active-low.
+  digitalWrite(STEPPER_ENABLE_PIN, enabled ? LOW : HIGH);
+}
+
+// Drive a bare DRV8871 through its two PWM inputs.
+//   command > 0: IN1 PWM, IN2 low
+//   command < 0: IN1 low, IN2 PWM
+//   command = 0: both low (coast/stop)
+void setDcMotor(uint8_t motor, int command) {
+  if (motor >= 2) return;
+  command = constrain(command, -255, 255);
+  dc[motor].pwmCommand = command;
+
+  if (command == 0) {
+    analogWrite(DC_IN1_PIN[motor], 0);
+    analogWrite(DC_IN2_PIN[motor], 0);
+  } else if (command > 0) {
+    analogWrite(DC_IN1_PIN[motor], command);
+    analogWrite(DC_IN2_PIN[motor], 0);
+  } else {
+    analogWrite(DC_IN1_PIN[motor], 0);
+    analogWrite(DC_IN2_PIN[motor], -command);
+  }
+}
+
+void stopOutputs() {
+  // Full-off releases servo pulses. The physical E-stop must still remove the
+  // actuator supply; this is only the software layer.
+  for (uint8_t i = 0; i < 8; ++i) pcaSet(i, 0, 4096);
+  for (uint8_t i = 0; i < 2; ++i) {
+    setDcMotor(i, 0);
+    dc[i].active = false;
+  }
+  for (uint8_t i = 0; i < 3; ++i) steppers[i].target = steppers[i].position;
+  setSteppersEnabled(false);
+}
+
+bool estopActive() { return digitalRead(ESTOP_PIN) == HIGH; }
+
+int getState() {
+  int state = armed ? 0x01 : 0;
+  if (estopActive()) state |= 0x02;
+  if (watchdogFault) state |= 0x04;
+  return state;
+}
+
+int heartbeat() {
+  lastHeartbeatMs = millis();
+  watchdogFault = false;
+  return getState();
+}
+
+int armSystem(bool enable) {
+  if (!enable) {
+    armed = false;
+    stopOutputs();
+  } else if (!estopActive() && !watchdogFault) {
+    armed = true;
+    lastHeartbeatMs = millis();
+    setSteppersEnabled(true);
+    for (uint8_t i = 0; i < 8; ++i) pcaSet(i, 0, servoTicks(i, servos[i].current));
+  }
+  return getState();
+}
+
+int setServo(int channel, int degrees, int durationMs) {
+  if (!armed || channel < 0 || channel >= 8 || degrees < 0 || degrees > 180) return -1;
+  ServoMotion &s = servos[channel];
+  s.start = s.current;
+  s.target = degrees;
+  s.startedMs = millis();
+  s.durationMs = max(20, durationMs);
+  return 0;
+}
+
+int moveStepper(int axis, int targetSteps, int speedStepsPerSecond) {
+  if (!armed || axis < 0 || axis >= 3 || speedStepsPerSecond <= 0) return -1;
+  steppers[axis].target = targetSteps;
+  steppers[axis].intervalUs = 1000000UL / constrain(speedStepsPerSecond, 1, 5000);
+  return 0;
+}
+
+int moveDc(int motor, int targetCounts, int maxPwm) {
+  if (!armed || motor < 0 || motor >= 2) return -1;
+  dc[motor].target = targetCounts;
+  dc[motor].maxPwm = constrain(maxPwm, 1, 255);
+  dc[motor].active = true;
+  return 0;
+}
+
+int setRgbLight(int light, int red, int green, int blue) {
+  if (light < 0 || light >= STAGE_LIGHT_COUNT) return -1;
+  stageLights[light] = {
+    static_cast<uint8_t>(constrain(red, 0, 255)),
+    static_cast<uint8_t>(constrain(green, 0, 255)),
+    static_cast<uint8_t>(constrain(blue, 0, 255))
+  };
+  showStageLights();
+  return 0;
+}
+
+int setAllRgbLights(int red, int green, int blue) {
+  const RgbColor color = {
+    static_cast<uint8_t>(constrain(red, 0, 255)),
+    static_cast<uint8_t>(constrain(green, 0, 255)),
+    static_cast<uint8_t>(constrain(blue, 0, 255))
+  };
+  for (uint8_t i = 0; i < STAGE_LIGHT_COUNT; ++i) stageLights[i] = color;
+  showStageLights();
+  return 0;
+}
+
+int stopAll() {
+  armed = false;
+  stopOutputs();
+  return getState();
+}
+
+int getEncoder(int motor) {
+  if (motor < 0 || motor >= 2) return 0;
+  noInterrupts();
+  const int32_t value = dc[motor].position;
+  interrupts();
+  return value;
+}
+
+// Signed motor command for monitoring: positive=forward, negative=reverse,
+// zero=stopped. The magnitude is the current PWM duty command (0..255).
+int getDcCommand(int motor) {
+  if (motor < 0 || motor >= 2) return 0;
+  return dc[motor].pwmCommand;
+}
+
+void encoder0() { dc[0].position += (digitalRead(ENCODER_A_PIN[0]) == digitalRead(ENCODER_B_PIN[0])) ? 1 : -1; }
+void encoder1() { dc[1].position += (digitalRead(ENCODER_A_PIN[1]) == digitalRead(ENCODER_B_PIN[1])) ? 1 : -1; }
+
+void updateServos(uint32_t nowMs) {
+  for (uint8_t i = 0; i < 8; ++i) {
+    ServoMotion &s = servos[i];
+    if (s.current == s.target) continue;
+    const uint32_t elapsed = nowMs - s.startedMs;
+    const float ratio = min(1.0f, static_cast<float>(elapsed) / s.durationMs);
+    s.current = s.start + (s.target - s.start) * ratio;
+    pcaSet(i, 0, servoTicks(i, s.current));
+  }
+}
+
+void updateSteppers(uint32_t nowUs) {
+  for (uint8_t i = 0; i < 3; ++i) {
+    StepperAxis &s = steppers[i];
+    if (s.position == s.target || nowUs - s.lastStepUs < s.intervalUs) continue;
+    const int direction = s.target > s.position ? 1 : -1;
+    digitalWrite(STEPPER_DIR_PIN[i], direction > 0 ? HIGH : LOW);
+    digitalWrite(STEPPER_STEP_PIN[i], HIGH);
+    delayMicroseconds(2);
+    digitalWrite(STEPPER_STEP_PIN[i], LOW);
+    s.position += direction;
+    s.lastStepUs = nowUs;
+  }
+}
+
+void updateDc() {
+  for (uint8_t i = 0; i < 2; ++i) {
+    if (!dc[i].active) continue;
+    noInterrupts();
+    const int32_t position = dc[i].position;
+    interrupts();
+    const int32_t error = dc[i].target - position;
+    if (abs(error) <= DC_POSITION_TOLERANCE) {
+      setDcMotor(i, 0);
+      dc[i].active = false;
+      continue;
+    }
+    const int32_t proportional = abs(error) * DC_KP_NUMERATOR / DC_KP_DENOMINATOR;
+    const int pwm = constrain(proportional, 35, dc[i].maxPwm);
+    setDcMotor(i, error > 0 ? pwm : -pwm);
+  }
+}
+
+void setup() {
+  Wire.begin();
+  pcaBegin();
+  sm16823Begin();
+  pinMode(ESTOP_PIN, INPUT_PULLUP);
+  pinMode(STEPPER_ENABLE_PIN, OUTPUT);
+  setSteppersEnabled(false);
+
+  for (uint8_t i = 0; i < 3; ++i) {
+    pinMode(STEPPER_STEP_PIN[i], OUTPUT);
+    pinMode(STEPPER_DIR_PIN[i], OUTPUT);
+    steppers[i].intervalUs = 2000;
+  }
+  for (uint8_t i = 0; i < 2; ++i) {
+    pinMode(DC_IN1_PIN[i], OUTPUT);
+    pinMode(DC_IN2_PIN[i], OUTPUT);
+    setDcMotor(i, 0);
+    pinMode(ENCODER_A_PIN[i], INPUT_PULLUP);
+    pinMode(ENCODER_B_PIN[i], INPUT_PULLUP);
+  }
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN[0]), encoder0, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN[1]), encoder1, CHANGE);
+
+  for (uint8_t i = 0; i < 8; ++i) {
+    servos[i] = {static_cast<float>(SERVO_SAFE_DEGREES[i]), static_cast<float>(SERVO_SAFE_DEGREES[i]),
+                 static_cast<float>(SERVO_SAFE_DEGREES[i]), 0, 20};
+    pcaSet(i, 0, servoTicks(i, servos[i].current));
+  }
+
+  Bridge.begin();
+  Bridge.provide("heartbeat", heartbeat);
+  Bridge.provide("arm_system", armSystem);
+  Bridge.provide("set_servo", setServo);
+  Bridge.provide("move_stepper", moveStepper);
+  Bridge.provide("move_dc", moveDc);
+  Bridge.provide("set_rgb_light", setRgbLight);
+  Bridge.provide("set_all_rgb_lights", setAllRgbLights);
+  Bridge.provide("stop_all", stopAll);
+  Bridge.provide("get_state", getState);
+  Bridge.provide("get_encoder", getEncoder);
+  Bridge.provide("get_dc_command", getDcCommand);
+
+  lastHeartbeatMs = millis();
+}
+
+void loop() {
+  const uint32_t nowMs = millis();
+  if (estopActive()) {
+    armed = false;
+    stopOutputs();
+  }
+  if (armed && nowMs - lastHeartbeatMs > COMMAND_WATCHDOG_MS) {
+    watchdogFault = true;
+    armed = false;
+    stopOutputs();
+  }
+  if (armed) {
+    updateServos(nowMs);
+    updateSteppers(micros());
+    updateDc();
+  }
+  delay(1);
+}
+

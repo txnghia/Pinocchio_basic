@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pinocchio Puppet Theater</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div><span class="eyebrow">ARDUINO UNO Q</span><h1>Pinocchio Puppet Theater</h1></div>
+      <div id="connection" class="pill offline">Connecting…</div>
+    </header>
+
+    <main>
+      <section class="status-card">
+        <div><span>System</span><strong id="system-status">DISARMED</strong></div>
+        <div><span>E-stop</span><strong id="estop-status">UNKNOWN</strong></div>
+        <div><span>Show</span><strong id="show-status">STOPPED</strong></div>
+        <div><span>Encoders L / R</span><strong id="encoders">0 / 0</strong></div>
+        <div><span>Left motor</span><strong id="left-motor-status">STOPPED · PWM 0</strong></div>
+        <div><span>Right motor</span><strong id="right-motor-status">STOPPED · PWM 0</strong></div>
+      </section>
+
+      <div id="error-container" class="error" hidden></div>
+
+      <section class="actions">
+        <button id="arm-button" class="primary">Arm actuators</button>
+        <button id="play-button">Play example show</button>
+        <button id="stop-button" class="danger">STOP ALL</button>
+      </section>
+
+      <section class="panel">
+        <h2>Puppet servos</h2>
+        <div id="servo-controls" class="control-grid"></div>
+      </section>
+
+      <section class="panel split">
+        <div>
+          <h2>Stage motion</h2>
+          <div id="stepper-controls"></div>
+        </div>
+        <div>
+          <h2>Scenery</h2>
+          <div id="scenery-controls"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Front stage RGB lights</h2>
+        <p class="hint">Six daisy-chained SM16823E modules on D19. Color is scaled by the brightness control.</p>
+        <div id="light-controls" class="control-grid"></div>
+      </section>
+    </main>
+
+    <script src="libs/socket.io.min.js"></script>
+    <script src="libs/arduino.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

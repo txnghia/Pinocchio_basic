@@ -1,0 +1,30 @@
+{
+  "cues": [
+    {
+      "name": "Neutral pose",
+      "actions": [
+        {"type": "all_lights", "red": 100, "green": 72, "blue": 42},
+        {"type": "servo", "name": "head", "degrees": 90, "duration_ms": 800},
+        {"type": "servo", "name": "left_arm_lift", "degrees": 80, "duration_ms": 800},
+        {"type": "servo", "name": "right_arm_lift", "degrees": 100, "duration_ms": 800},
+        {"type": "servo", "name": "left_hand_wave", "degrees": 90, "duration_ms": 800},
+        {"type": "servo", "name": "right_hand_wave", "degrees": 90, "duration_ms": 800},
+        {"type": "servo", "name": "left_leg", "degrees": 90, "duration_ms": 800},
+        {"type": "servo", "name": "right_leg", "degrees": 90, "duration_ms": 800},
+        {"type": "servo", "name": "puppet_z", "degrees": 90, "duration_ms": 800},
+        {"type": "wait", "seconds": 1.0}
+      ]
+    },
+    {
+      "name": "Wave hello",
+      "actions": [
+        {"type": "servo", "name": "right_arm_lift", "degrees": 145, "duration_ms": 500},
+        {"type": "servo", "name": "right_hand_wave", "degrees": 55, "duration_ms": 250},
+        {"type": "wait", "seconds": 0.3},
+        {"type": "servo", "name": "right_hand_wave", "degrees": 125, "duration_ms": 250},
+        {"type": "wait", "seconds": 0.3},
+        {"type": "servo", "name": "right_hand_wave", "degrees": 90, "duration_ms": 250}
+      ]
+    }
+  ]
+}

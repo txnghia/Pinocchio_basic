@@ -1,0 +1,6 @@
+name: pinocchio_add_light
+description: Blink an LED via microcontroller using RPC calls
+ports: []
+bricks:
+- arduino:web_ui: {}
+icon: 💡
